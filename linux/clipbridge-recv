@@ -1,0 +1,127 @@
+#!/usr/bin/python3
+"""Receives clipboard images streamed by the Mac agent over one long-lived SSH
+session and owns the X CLIPBOARD on the clipbridge display, where Claude Code
+(xclip) and Codex (arboard) read pasted images.
+
+Stream framing on stdin, repeated:  b"image <n>\\n" + <n PNG bytes>  |  b"clear\\n"
+
+Images are served as a single property, never INCR: arboard abandons INCR
+transfers after 10ms between chunks, and an abandoned INCR wedges most owners.
+BIG-REQUESTS (via xcb) lets one property carry a full-size screenshot.
+
+When the stream ends, the last image stays pasteable until another owner (the
+next stream, or an app copying text) takes the selection.
+"""
+
+import os
+import select
+import struct
+import sys
+
+import xcffib
+import xcffib.xproto as xp
+
+DISPLAY = os.environ.get("CLIPBRIDGE_DISPLAY", ":99")
+
+
+def log(message: str) -> None:
+    print(f"clipbridge-recv: {message}", file=sys.stderr, flush=True)
+
+
+class Owner:
+    def __init__(self) -> None:
+        self.conn = xcffib.connect(display=DISPLAY)
+        self.max_bytes = self.conn.get_maximum_request_length() * 4 - 64
+        screen = self.conn.get_setup().roots[0]
+        self.window = self.conn.generate_id()
+        self.conn.core.CreateWindow(
+            xcffib.CopyFromParent, self.window, screen.root, 0, 0, 1, 1, 0,
+            xp.WindowClass.InputOutput, screen.root_visual, 0, [],
+        )
+        self.clipboard, self.targets, self.png = (
+            self.atom(name) for name in ("CLIPBOARD", "TARGETS", "image/png")
+        )
+        self.image: bytes | None = None
+
+    def atom(self, name: str) -> int:
+        return self.conn.core.InternAtom(False, len(name), name).reply().atom
+
+    def take(self, image: bytes | None) -> None:
+        if image is not None and len(image) > self.max_bytes:
+            log(f"image of {len(image)} bytes exceeds the {self.max_bytes}-byte request limit")
+            image = None
+        self.image = image
+        owner = self.window if image is not None else xcffib.NONE
+        self.conn.core.SetSelectionOwner(owner, self.clipboard, xp.Time.CurrentTime)
+        self.conn.flush()
+
+    def handle_events(self) -> None:
+        while event := self.conn.poll_for_event():
+            if isinstance(event, xp.SelectionClearEvent):
+                self.image = None
+            elif isinstance(event, xp.SelectionRequestEvent):
+                self.answer(event)
+        self.conn.flush()
+
+    def answer(self, request: xp.SelectionRequestEvent) -> None:
+        prop = request.property or request.target  # pre-ICCCM requestors
+        if self.image is None or request.selection != self.clipboard:
+            prop = xcffib.NONE
+        elif request.target == self.targets:
+            atoms = [self.targets, self.png]
+            self.conn.core.ChangeProperty(
+                xp.PropMode.Replace, request.requestor, prop, xp.Atom.ATOM, 32,
+                len(atoms), struct.pack(f"={len(atoms)}I", *atoms),
+            )
+        elif request.target == self.png:
+            self.conn.core.ChangeProperty(
+                xp.PropMode.Replace, request.requestor, prop, self.png, 8,
+                len(self.image), self.image,
+            )
+        else:
+            prop = xcffib.NONE
+        notify = xp.SelectionNotifyEvent.synthetic(
+            request.time, request.requestor, request.selection, request.target, prop
+        )
+        self.conn.core.SendEvent(False, request.requestor, xp.EventMask.NoEvent, notify.pack())
+
+
+def frames(buffer: bytearray):
+    """Yields complete frames from buffer, leaving any partial frame in place."""
+    while (newline := buffer.find(b"\n")) >= 0:
+        command, *args = buffer[:newline].decode().split()
+        if command == "clear":
+            del buffer[: newline + 1]
+            yield None
+        elif command == "image":
+            end = newline + 1 + int(args[0])
+            if len(buffer) < end:
+                return
+            image = bytes(buffer[newline + 1 : end])
+            del buffer[:end]
+            yield image
+        else:
+            raise ValueError(f"unknown command {command!r}")
+
+
+def main() -> None:
+    owner = Owner()
+    stdin = sys.stdin.buffer.fileno()
+    x_fd = owner.conn.get_file_descriptor()
+    buffer = bytearray()
+    streaming = True
+    while True:
+        owner.handle_events()
+        if not streaming and owner.image is None:
+            return
+        readable, _, _ = select.select([x_fd] + [stdin] * streaming, [], [])
+        if stdin in readable:
+            chunk = os.read(stdin, 1 << 20)
+            streaming = bool(chunk)
+            buffer += chunk
+            for image in frames(buffer):
+                owner.take(image)
+
+
+if __name__ == "__main__":
+    main()

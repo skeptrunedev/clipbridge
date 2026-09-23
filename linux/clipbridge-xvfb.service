@@ -1,0 +1,9 @@
+[Unit]
+Description=clipbridge virtual X display (clipboard target for image paste over SSH)
+
+[Service]
+ExecStart=/usr/bin/Xvfb :99 -nolisten tcp -screen 0 64x64x24 -maxbigreqsize 64
+Restart=always
+
+[Install]
+WantedBy=default.target
