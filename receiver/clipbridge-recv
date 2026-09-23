@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Receives clipboard images streamed by the Mac agent over one long-lived SSH
+"""Receives clipboard images streamed by a sender over one long-lived SSH
 session and owns the X CLIPBOARD on the clipbridge display, where Claude Code
 (xclip) and Codex (arboard) read pasted images.
 
@@ -50,9 +50,13 @@ class Owner:
         if image is not None and len(image) > self.max_bytes:
             log(f"image of {len(image)} bytes exceeds the {self.max_bytes}-byte request limit")
             image = None
+        # Several senders (one receiver each) share the display. Clearing
+        # releases only our own ownership, never another sender's image.
+        if image is not None:
+            self.conn.core.SetSelectionOwner(self.window, self.clipboard, xp.Time.CurrentTime)
+        elif self.image is not None:
+            self.conn.core.SetSelectionOwner(xcffib.NONE, self.clipboard, xp.Time.CurrentTime)
         self.image = image
-        owner = self.window if image is not None else xcffib.NONE
-        self.conn.core.SetSelectionOwner(owner, self.clipboard, xp.Time.CurrentTime)
         self.conn.flush()
 
     def handle_events(self) -> None:

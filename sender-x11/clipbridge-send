@@ -1,0 +1,124 @@
+#!/usr/bin/python3
+"""Mirrors images copied on this X11 desktop into the X clipboard of SSH hosts,
+so Ctrl+V image paste works in Claude Code and Codex running there.
+
+Only images cross the wire. When the clipboard changes to anything else, the
+hosts are cleared so a stale image is never pasted. Clipboard changes arrive as
+XFixes events (no polling), and each host gets one long-lived SSH stream to
+clipbridge-recv, so remote shell startup is paid once, not per copy.
+
+usage: clipbridge-send <ssh-host>...
+"""
+
+import subprocess
+import sys
+
+import xcffib
+import xcffib.xfixes
+import xcffib.xproto as xp
+
+
+def log(message: str) -> None:
+    print(f"clipbridge-send: {message}", file=sys.stderr, flush=True)
+
+
+class Link:
+    """A persistent `ssh <host> clipbridge-recv` stream, reopened when it dies."""
+
+    def __init__(self, host: str) -> None:
+        self.host = host
+        self.ssh: subprocess.Popen | None = None
+
+    def send(self, frame: bytes) -> None:
+        # One retry covers a stream that died since the last copy (suspend,
+        # network change, remote restart).
+        for attempt in (1, 2):
+            try:
+                self.open_if_needed().write(frame)
+                self.ssh.stdin.flush()
+                return
+            except OSError as error:
+                log(f"{self.host}: send failed (attempt {attempt}): {error}")
+                self.close()
+
+    def open_if_needed(self):
+        if self.ssh is None or self.ssh.poll() is not None:
+            self.ssh = subprocess.Popen(
+                [
+                    "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                    "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2",
+                    self.host, "~/.local/bin/clipbridge-recv",
+                ],
+                stdin=subprocess.PIPE,
+            )
+            log(f"{self.host}: connected")
+        return self.ssh.stdin
+
+    def close(self) -> None:
+        if self.ssh is not None:
+            self.ssh.kill()
+            self.ssh.wait()
+            self.ssh = None
+
+
+def clipboard_png() -> bytes | None:
+    """The clipboard as PNG, read with xclip (which handles INCR transfers)."""
+    targets = subprocess.run(
+        ["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"],
+        capture_output=True, text=True,
+    ).stdout.split()
+    if "image/png" not in targets:
+        return None
+    png = subprocess.run(
+        ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
+        capture_output=True,
+    ).stdout
+    return png or None
+
+
+def main() -> None:
+    hosts = sys.argv[1:]
+    if not hosts:
+        sys.exit(__doc__.strip().splitlines()[-1])
+    links = [Link(host) for host in hosts]
+    for link in links:  # connect now so the first copy doesn't wait on SSH
+        link.open_if_needed()
+
+    conn = xcffib.connect()
+    xfixes = conn(xcffib.xfixes.key)
+    xfixes.QueryVersion(5, 0).reply()
+    root = conn.get_setup().roots[0].root
+    clipboard = conn.core.InternAtom(False, len("CLIPBOARD"), "CLIPBOARD").reply().atom
+    xfixes.SelectSelectionInput(
+        root, clipboard,
+        xcffib.xfixes.SelectionEventMask.SetSelectionOwner
+        | xcffib.xfixes.SelectionEventMask.SelectionWindowDestroy
+        | xcffib.xfixes.SelectionEventMask.SelectionClientClose,
+    )
+    conn.flush()
+
+    # Only copies made while running are pushed. Re-pushing whatever was
+    # already on the clipboard at startup would steal the remote clipboard from
+    # another sender's newer copy ("last copy wins").
+    hosts_hold_image = False
+    while True:
+        # Block until the clipboard owner changes, then drain any burst.
+        conn.wait_for_event()
+        while conn.poll_for_event():
+            pass
+
+        if png := clipboard_png():
+            frame = b"image %d\n" % len(png) + png
+            hosts_hold_image = True
+            log(f"pushed image ({len(png)} bytes)")
+        elif hosts_hold_image:
+            frame = b"clear\n"
+            hosts_hold_image = False
+        else:
+            frame = None
+        for link in links if frame else ():
+            link.send(frame)
+
+
+if __name__ == "__main__":
+    main()

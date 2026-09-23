@@ -31,6 +31,11 @@ $host_args  </array>
 </plist>
 PLIST
 
-launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+service="gui/$(id -u)/$label"
+if launchctl print "$service" >/dev/null 2>&1; then
+  launchctl bootout "$service"
+  # bootout returns before the job is gone; bootstrapping early fails with EIO.
+  while launchctl print "$service" >/dev/null 2>&1; do sleep 0.1; done
+fi
 launchctl bootstrap "gui/$(id -u)" "$plist"
 echo "clipbridge (mac) running for: $*  (log: ~/Library/Logs/clipbridge.log)"

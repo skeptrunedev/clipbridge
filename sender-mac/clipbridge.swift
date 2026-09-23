@@ -19,6 +19,11 @@ final class Link {
 
     init(host: String) { self.host = host }
 
+    /// Connect ahead of the first copy so it doesn't wait on SSH.
+    func warm() {
+        do { _ = try openIfNeeded() } catch { log("\(host): connect failed: \(error)") }
+    }
+
     func send(_ frame: Data) {
         // One retry covers a stream that died since the last copy (sleep,
         // network change, remote restart).
@@ -70,8 +75,11 @@ signal(SIGPIPE, SIG_IGN)  // a dead stream surfaces as a write error instead
 let links = hostNames.map(Link.init)
 let pasteboard = NSPasteboard.general
 let sendQueue = DispatchQueue(label: "clipbridge.send")
-var lastChangeCount = -1
-var hostsHoldImage = true  // unknown at startup, so clear once if no image
+// Only copies made while running are pushed. Re-pushing whatever was already on
+// the clipboard at startup would steal the remote clipboard from another
+// sender's newer copy ("last copy wins").
+var lastChangeCount = pasteboard.changeCount
+var hostsHoldImage = false
 
 /// The clipboard as PNG: native PNG, else anything NSImage can read
 /// (screenshots arrive as TIFF, Finder copies as an image file URL).
@@ -104,6 +112,6 @@ func poll() {
     }
 }
 
+sendQueue.async { links.forEach { $0.warm() } }
 Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in poll() }
-poll()
 RunLoop.main.run()

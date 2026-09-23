@@ -1,0 +1,13 @@
+[Unit]
+Description=clipbridge: mirror copied images to SSH hosts for Claude Code / Codex paste
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/clipbridge-send $CLIPBRIDGE_HOSTS
+EnvironmentFile=%h/.config/clipbridge/hosts.env
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
