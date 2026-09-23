@@ -50,3 +50,12 @@ sender-x11/install.sh <ssh-host>...   # logs: journalctl --user -u clipbridge-se
 
 Copy or screenshot an image to the clipboard (Mac: Cmd+Ctrl+Shift+4), then
 press **Ctrl+V** in Claude Code or Codex running on the SSH host.
+
+If your terminal binds Ctrl+V to its own text paste (VS Code on Linux with a
+`workbench.action.terminal.paste` binding), the keypress never reaches the app.
+Bind another key to send a raw Ctrl+V, e.g. in VS Code `keybindings.json`:
+
+```json
+{ "key": "ctrl+alt+v", "command": "workbench.action.terminal.sendSequence",
+  "args": { "text": "\u0016" }, "when": "terminalFocus" }
+```
