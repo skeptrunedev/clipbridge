@@ -1,5 +1,7 @@
 # clipbridge
 
+![clipbridge: paste screenshots over SSH into Claude Code and Codex](.github/social-preview.png)
+
 **Paste screenshots into Claude Code and Codex when they run on a remote machine over SSH.**
 
 You run your coding agents on a beefy box over SSH (often inside tmux, herdr or a

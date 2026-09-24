@@ -1,0 +1,151 @@
+<!doctype html>
+<!-- Source for social-preview.png (1280x640). Render:
+     chrome-headless-shell --screenshot=social-preview.png --window-size=1280,640 --hide-scrollbars social-preview.html -->
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0c0f;
+    --panel: #14161b;
+    --panel-2: #1b1e25;
+    --line: #2a2e38;
+    --text: #eef0f4;
+    --muted: #8b92a3;
+    --accent: #ff9d4d;
+    --accent-2: #ffc58f;
+    --ok: #7ee2a8;
+  }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(900px 420px at 88% 110%, rgba(255,157,77,.16), transparent 60%),
+      radial-gradient(700px 380px at -5% -20%, rgba(120,140,255,.10), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Inter Tight", "Fira Sans", sans-serif;
+    position: relative;
+  }
+  /* faint dot grid */
+  body::before {
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+  }
+
+  .copy { position: absolute; left: 80px; top: 72px; width: 1120px; }
+  .eyebrow {
+    font: 500 20px "JetBrains Mono", monospace; color: var(--accent);
+    letter-spacing: .02em; display: flex; align-items: center; gap: 12px;
+  }
+  .eyebrow { justify-content: space-between; }
+  .eyebrow .mark { font-weight: 700; font-size: 24px; }
+  .eyebrow .url { color: var(--muted); font-size: 18px; }
+  .eyebrow .key {
+    font-size: 17px; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 7px;
+    padding: 3px 10px;
+  }
+  h1 {
+    margin-top: 18px; font-weight: 700; font-size: 92px; letter-spacing: -.035em;
+    line-height: 1;
+  }
+  .tagline {
+    margin-top: 18px; font-size: 32px; font-weight: 500; color: var(--muted);
+    letter-spacing: -.01em;
+  }
+  .tagline b { color: var(--text); font-weight: 600; }
+
+  /* scene */
+  .scene { position: absolute; left: 80px; right: 80px; top: 360px; height: 220px; }
+
+  .shot {
+    position: absolute; left: 0; top: 18px; width: 270px; height: 184px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.45);
+    transform: rotate(-3deg); padding: 14px;
+  }
+  .shot .bar { display: flex; gap: 6px; margin-bottom: 12px; }
+  .shot .bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .chart { display: flex; align-items: flex-end; gap: 10px; height: 96px; padding: 0 4px; border-bottom: 1px solid var(--line); }
+  .chart span { flex: 1; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, var(--accent-2), var(--accent)); opacity: .9; }
+  .chart span.dim { background: #3a4050; }
+  .shot .cap { margin-top: 10px; font: 500 14px "JetBrains Mono", monospace; color: var(--muted); }
+  .badge {
+    position: absolute; left: 196px; top: -4px; transform: rotate(4deg);
+    font: 700 14px "JetBrains Mono", monospace; color: #1a0f05; background: var(--accent);
+    padding: 6px 10px; border-radius: 8px; box-shadow: 0 8px 20px rgba(255,157,77,.35);
+  }
+
+  .wire {
+    position: absolute; left: 300px; top: 70px; width: 250px; height: 80px;
+  }
+  .wire .label {
+    position: absolute; left: 50%; top: 2px; transform: translateX(-50%);
+    font: 500 15px "JetBrains Mono", monospace; color: var(--muted); white-space: nowrap;
+  }
+
+  .term {
+    position: absolute; right: 0; top: 0; width: 560px; height: 184px;
+    background: #0f1115; border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,157,77,.06);
+    overflow: hidden;
+  }
+  .term .top {
+    height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    font: 500 14px "JetBrains Mono", monospace; color: var(--muted);
+  }
+  .term .top i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+  .term .top span { margin-left: 10px; }
+  .term pre {
+    padding: 18px 20px; font: 400 19px/1.65 "JetBrains Mono", monospace; color: var(--text);
+  }
+  .dim { color: var(--muted); }
+  .ok { color: var(--ok); }
+  .chip {
+    color: #1a0f05; background: var(--accent); border-radius: 6px; padding: 1px 7px;
+    font-weight: 700;
+  }
+  .cursor { display: inline-block; width: 11px; height: 22px; background: var(--text); vertical-align: -4px; margin-left: 2px; }
+</style>
+</head>
+<body>
+  <div class="copy">
+    <div class="eyebrow"><span class="mark">clipbridge</span><span class="url">github.com/skeptrunedev/clipbridge</span></div>
+    <h1>Paste screenshots over SSH</h1>
+    <div class="tagline">into <b>Claude Code</b> and <b>Codex</b> running on a remote box. One-command install.</div>
+  </div>
+
+  <div class="scene">
+    <div class="shot">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="chart">
+        <span class="dim" style="height:38%"></span><span class="dim" style="height:55%"></span>
+        <span style="height:92%"></span><span class="dim" style="height:47%"></span>
+        <span class="dim" style="height:63%"></span><span class="dim" style="height:30%"></span>
+      </div>
+      <div class="cap">screenshot.png</div>
+    </div>
+    <div class="badge">copied</div>
+
+    <div class="wire">
+      <svg width="250" height="80" viewBox="0 0 250 80" fill="none">
+        <path d="M8 58 C 80 10, 170 10, 236 58" stroke="#ff9d4d" stroke-width="2.5" stroke-dasharray="3 9" stroke-linecap="round"/>
+        <path d="M226 50 L238 60 L223 64" stroke="#ff9d4d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="label">ssh</div>
+    </div>
+
+    <div class="term">
+      <div class="top"><i></i><i></i><i></i><span>you@gpu-box: ~/app</span></div>
+      <pre><span class="dim">$</span> claude
+<span class="dim"># Ctrl+V</span>
+<span class="dim">❯</span> <span class="chip">[Image #1]</span> why did this spike?<span class="cursor"></span></pre>
+    </div>
+  </div>
+</body>
+</html>
