@@ -59,3 +59,7 @@ Bind another key to send a raw Ctrl+V, e.g. in VS Code `keybindings.json`:
 { "key": "ctrl+alt+v", "command": "workbench.action.terminal.sendSequence",
   "args": { "text": "\u0016" }, "when": "terminalFocus" }
 ```
+
+## License
+
+MIT
