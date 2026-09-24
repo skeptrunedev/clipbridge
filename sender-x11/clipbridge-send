@@ -61,14 +61,15 @@ class Link:
             self.ssh = None
 
 
-def clipboard_png() -> bytes | None:
-    """The clipboard as PNG, read with xclip (which handles INCR transfers)."""
-    targets = subprocess.run(
+def clipboard_targets() -> list[str]:
+    return subprocess.run(
         ["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"],
         capture_output=True, text=True,
     ).stdout.split()
-    if "image/png" not in targets:
-        return None
+
+
+def clipboard_png() -> bytes | None:
+    """The clipboard as PNG, read with xclip (which handles INCR transfers)."""
     png = subprocess.run(
         ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
         capture_output=True,
@@ -107,13 +108,15 @@ def main() -> None:
         while conn.poll_for_event():
             pass
 
-        if png := clipboard_png():
+        targets = clipboard_targets()
+        if "image/png" in targets and (png := clipboard_png()):
             frame = b"image %d\n" % len(png) + png
             hosts_hold_image = True
             log(f"pushed image ({len(png)} bytes)")
         elif hosts_hold_image:
             frame = b"clear\n"
             hosts_hold_image = False
+            log(f"cleared (clipboard now offers: {' '.join(targets) or 'nothing'})")
         else:
             frame = None
         for link in links if frame else ():
